@@ -1,15 +1,19 @@
 extern crate clap;
 extern crate chrono;
 extern crate csv;
+extern crate serde;
+extern crate ansi_term;
 
 use clap::{App, Arg, crate_version, crate_authors, crate_description};
 use chrono::{Local, DateTime};
 
 use crate::note::Note;
 use std::path::Path;
+use std::fs::{File, OpenOptions};
+use csv::Error;
 
 mod note;
-mod config;
+mod setup;
 
 /* CLI Commands */
 const TAKE_COMMAND: &str = "take";
@@ -19,8 +23,10 @@ const PRINT_COMMAND: &str = "print";
 
 const SETUP_COMMAND: &str = "setup";
 
+const OUT_FILE_LOCATION: &str = "./out.csv";
 
 fn main() {
+    let enabled = ansi_term::enable_ansi_support();
     let matches = App::new("NOTEABLE - The CLI Note App")
         .author(crate_authors!())
         .version(format!("v{}", crate_version!()).as_str())
@@ -53,8 +59,20 @@ fn main() {
         //     .default_value(CONFIG_DEFAULT_PATH)
         // )
         .get_matches();
-    let command_time: DateTime<Local> = Local::now();
-    // csv::ReaderBuilder::from_path()
+
+    let f = OpenOptions::new()
+        .create(true)
+        .read(true)
+        .append(true)
+        .open(Path::new(OUT_FILE_LOCATION))
+        .expect("error opening file");
+
+    let mut csv_reader = csv::ReaderBuilder::new()
+        .has_headers(true)
+        .comment(Some(b'#'))
+        .from_reader(
+            f.try_clone().expect("Error with file opening for read")
+        );
 
     match matches.subcommand() {
         (TAKE_COMMAND, Some(arg)) => {
@@ -65,10 +83,28 @@ fn main() {
                 note_value = Note::from_prompt();
             };
 
+            let write_header_row = match csv_reader.deserialize::<Note>().next() {
+                // if there's nothing in the file we can assume there's no headers, we should write them
+                None => true,
+                // if there is something there probably been written before and we can ignore
+                Some(_) => false
+            };
 
+            let mut writer = csv::WriterBuilder::new()
+                .has_headers(write_header_row)
+                .from_writer(
+                    f.try_clone().expect("error")
+                );
+            writer.serialize(note_value);
         }
         (PRINT_COMMAND, Some(arg)) => {
-            println!("print")
+            println!("print");
+            let records_iter = csv_reader.deserialize::<Note>();
+            for r in records_iter {
+                let record: Note = r.unwrap();
+                println!("{:?}", record);
+                //https://docs.rs/csv/1.1.3/csv/tutorial/index.html#setup
+            };
         }
         _ => {
             println!("none")

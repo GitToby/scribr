@@ -1,7 +1,9 @@
 use chrono::{Local, DateTime};
 use std::io::{stdin, Write, stdout};
+use serde::{Deserialize, Serialize};
+use ansi_term::Colour::{Blue, Yellow};
 
-#[derive(Debug)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct Note {
     pub body: String,
     pub record_time: DateTime<Local>,
@@ -47,7 +49,7 @@ impl Note {
 fn fetch_user_confirm(prompt: &str) -> bool {
     let mut s = String::new();
     while !["y", "n"].contains(&s.trim()) {
-        println!("{} (y/n)", prompt);
+        println!("{} (y/n)", Blue.bold().paint(prompt));
         stdin().read_line(&mut s).expect("Did not enter a correct string");
     }
     return match s.trim() {
