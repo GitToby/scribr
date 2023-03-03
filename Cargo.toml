@@ -9,5 +9,6 @@ edition = "2018"
 
 [dependencies]
 clap = { version = "4.1.8", features = ["derive"] }
-config = { version = "0.13.1", features = ["toml"] }
+chrono = "0.4.23"
 dirs = "4.0.0"
+rev_lines = "0.2.1"
