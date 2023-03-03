@@ -12,3 +12,5 @@ clap = { version = "4.1.8", features = ["derive"] }
 chrono = "0.4.23"
 dirs = "4.0.0"
 rev_lines = "0.2.1"
+fuzzy-matcher = "0.3.7"
+scan_fmt = "0.2.6"
