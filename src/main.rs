@@ -31,11 +31,27 @@ struct Cli {
 }
 
 #[derive(Subcommand)]
+enum GhCommand {
+    /// Log in to your github account to back up commands
+    Login,
+
+    /// Back up notes to a GitHub gist
+    Backup,
+
+    /// Restore your notes file from a GitHub gist
+    Restore {
+        /// Force overwriting your local file with the remote file
+        #[arg(short, long)]
+        force: bool,
+    },
+}
+
+#[derive(Subcommand)]
 enum Commands {
     /// Take a note
     Take {
         /// The note value the note should contain.
-        note_value: String,
+        note: String,
 
         /// Echo the note to the console rather than write to disk
         #[arg(short, long)]
@@ -62,14 +78,11 @@ enum Commands {
     /// 📁 Echo the notes file path
     Path,
 
-    /// ☁️ Back up notes to a GitHub gist
-    Backup,
-
-    /// ☁️ Restore your notes file from a GitHub gist
-    Restore {
-        /// Force overwriting your local file with the remote file
-        #[arg(short, long)]
-        force: bool,
+    /// ☁️ Interact with the GitHub in the context of scribr
+    #[command()]
+    Gh {
+        #[command(subcommand)]
+        command: Option<GhCommand>,
     },
 }
 
@@ -78,9 +91,13 @@ fn main() {
 
     let note_file = match cli.file {
         Some(notes_file) => notes_file,
-        None => home_dir()
-            .map(|p| p.join(".notes.txt"))
-            .expect("No home dir found!!"),
+        None => {
+            let note_path = home_dir()
+                .map(|p| p.join(".notes.txt"))
+                .expect("No home dir found!!");
+            println!("Setting custom note path {}", note_path.display());
+            note_path
+        }
     };
 
     let settings = Settings {
@@ -94,12 +111,16 @@ fn main() {
     // You can check for the existence of subcommands, and if found use their
     // matches just as you would the top level cmd
     match &cli.command {
-        Some(Commands::Take { note_value, echo }) => take_note(settings, note_value, echo),
+        Some(Commands::Take { note, echo }) => take_note(settings, note, echo),
         Some(Commands::List { count }) => list_notes(settings, count),
         Some(Commands::Search { term, count }) => search_notes(settings, term, count),
         Some(Commands::Path {}) => echo_path(settings),
-        Some(Commands::Backup {}) => echo_under_construction(settings),
-        Some(Commands::Restore { force: _force }) => echo_under_construction(settings),
+        Some(Commands::Gh { command }) => match command {
+            Some(GhCommand::Login {}) => echo_under_construction(settings),
+            Some(GhCommand::Backup) => echo_under_construction(settings),
+            Some(GhCommand::Restore { force: _force }) => echo_under_construction(settings),
+            _ => {}
+        },
         _ => {}
     }
 }

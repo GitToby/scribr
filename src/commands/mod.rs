@@ -23,18 +23,18 @@ fn get_notes_file(path: PathBuf) -> File {
     file
 }
 
-pub fn take_note(settings: Settings, note_value: &String, echo: &bool) {
+pub fn take_note(settings: Settings, note: &String, echo: &bool) {
     if settings.verbosity > 0 {
-        println!("✏️✏️✏️ Taking note {}", note_value);
+        println!("✏️✏️✏️ Taking note {}", note);
     }
 
     let mut file = get_notes_file(settings.notes_file_path);
 
-    let note = Note::new(note_value.clone());
+    let full_note = Note::new(note.clone());
     if *echo {
-        println!("{}", note)
+        println!("{}", full_note)
     } else {
-        writeln!(file, "{}", note).unwrap();
+        writeln!(file, "{}", full_note).unwrap();
     }
 }
 
@@ -52,17 +52,17 @@ pub fn list_notes(settings: Settings, count: &u8) {
     }
 }
 
-pub fn search_notes(settings: Settings, search_term: &String, count: &u8) {
+pub fn search_notes(settings: Settings, term: &String, count: &u8) {
     let file = get_notes_file(settings.notes_file_path);
     let reader = RevLines::new(BufReader::new(file)).unwrap();
     let matcher = SkimMatcherV2::default();
 
-    println!("Searching notes with term \"{}\"...", search_term);
+    println!("Searching notes with term \"{}\"...", term);
 
     let mut line_matches = Vec::new();
     for line in reader {
         let note = Note::new_from_line(&line);
-        let match_res = matcher.fuzzy_match(&note.note_value, search_term);
+        let match_res = matcher.fuzzy_match(&note.note_value, term);
         match match_res {
             None => {}
             Some(match_score) => line_matches.push((match_score, note)),
