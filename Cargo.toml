@@ -1,7 +1,7 @@
 [package]
-name = "noteable"
+name = "scribr"
 version = "0.1.0"
-description ="still in alpha!"
+description ="Take notes in the CLI and back them up to GitHub! 📓🚀"
 authors = ["Toby Devlin <toby@tobydevlin.com>"]
 edition = "2018"
 

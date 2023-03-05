@@ -14,15 +14,19 @@ use scan_fmt::scan_fmt;
 
 // https://docs.rs/clap/4.1.8/clap/_derive/index.html
 #[derive(Parser)]
-#[command(author, version, about, long_about = None)]
+#[command(author, version, about, long_about = None, arg_required_else_help(true))]
 struct Cli {
     /// Sets a custom config file
-    #[arg(short, long, value_name = "FILE")]
-    notes_file: Option<PathBuf>,
+    #[arg(short, long)]
+    file: Option<PathBuf>,
 
     /// Turn debugging information on
     #[arg(short, long, action = clap::ArgAction::Count)]
     verbose: u8,
+
+    /// Turn magic commands off while searching or listing notes
+    #[arg(short, long)]
+    no_magic_commands: bool,
 
     #[command(subcommand)]
     command: Option<Commands>,
@@ -32,7 +36,7 @@ struct Cli {
 enum Commands {
     /// Take a note
     Take {
-        /// lists test values
+        /// The note value the note should contain.
         note_value: String,
 
         /// Echo the note to the console rather than write to disk
@@ -40,46 +44,55 @@ enum Commands {
         echo: bool,
     },
 
-    /// List your notes.
+    /// 📑 List your notes chronologically.
     List {
-        // Number of notes to list
+        /// Number of notes to list
         #[arg(short = 'n', long, default_value = "10")]
         count: u8,
     },
 
-    /// Search
+    /// 🔎 Search your notes with fuzzy matching
     Search {
-        /// Term to search for.
+        /// Term to search for across all notes.
         term: String,
 
-        // Number of notes to list.
+        /// Number of notes to list.
         #[arg(short = 'n', long, default_value = "10")]
         count: u8,
     },
 
-    /// echo the notes file path
+    /// 📁 Echo the notes file path
     Path,
+
+    /// ☁️ Back up notes to a GitHub gist
+    Backup,
+
+    /// ☁️ Restore your notes file from a GitHub gist
+    Restore {
+        /// Force overwriting your local file with the remote file
+        #[arg(short, long)]
+        force: bool,
+    },
 }
 
 #[derive(Debug)]
 struct Settings {
     notes_file_path: PathBuf,
     verbosity: u8,
+    no_magic_commands: bool,
 }
 
 impl Settings {
     fn print_to_console(&self) {
-        match self.verbosity {
-            // warnings only
-            0 => {}
-            // info level
-            1 => {
-                println!("Using note file at {}", self.notes_file_path.display());
+        if self.verbosity > 0 {
+            println!("Running in verbose level {}.", self.verbosity);
+            println!("Using note file at {}", self.notes_file_path.display());
+            if self.no_magic_commands {
+                println!("Ignoring magic commands.");
             }
-            // debug level
-            _ => {
-                println!("{:?}", self);
-            }
+        }
+        if self.verbosity > 1 {
+            println!("Full settings: {:?}", self);
         }
     }
 }
@@ -135,7 +148,10 @@ fn get_notes_file(path: PathBuf) -> File {
 }
 
 fn take_note(settings: Settings, note_value: &String, echo: &bool) {
-    println!("taking note {}", note_value);
+    if settings.verbosity > 0 {
+        println!("✏️ ✏️ ✏️ Taking note {}", note_value);
+    }
+
     let mut file = get_notes_file(settings.notes_file_path);
 
     let note = Note::new(note_value.clone());
@@ -148,25 +164,16 @@ fn take_note(settings: Settings, note_value: &String, echo: &bool) {
 
 fn list_notes(settings: Settings, count: &u8) {
     if settings.verbosity > 0 {
-        println!("Printing your last {} notes:", count);
+        println!("📓 Printing your last {} notes:", count);
     }
 
     let file = get_notes_file(settings.notes_file_path);
-    let reader = RevLines::new(BufReader::new(file)).unwrap();
-    for (i, note) in reader.enumerate() {
-        if i >= *count as usize {
-            break;
-        }
-        match settings.verbosity {
-            _ => {
-                println!("Note {}: {}", i, note);
-            }
-        }
-    }
-}
+    let mut reader = RevLines::new(BufReader::new(file)).unwrap();
 
-fn _format_note(timestamp: DateTime<Local>, note_value: &String) -> String {
-    format!("{} - {}", timestamp.to_rfc3339(), note_value)
+    for i in 0..*count {
+        let val = reader.next().unwrap();
+        println!("Note {}: {}", i, val);
+    }
 }
 
 fn search_notes(settings: Settings, search_term: &String, count: &u8) {
@@ -209,12 +216,8 @@ fn echo_path(settings: Settings) {
 
 fn main() {
     let cli = Cli::parse();
-    let verbose = cli.verbose;
-    if verbose > 0 {
-        println!("Running in verbose level {}.", verbose);
-    };
 
-    let note_file = match cli.notes_file {
+    let note_file = match cli.file {
         Some(notes_file) => notes_file,
         None => home_dir()
             .map(|p| p.join(".notes.txt"))
@@ -223,7 +226,8 @@ fn main() {
 
     let settings = Settings {
         notes_file_path: note_file,
-        verbosity: verbose,
+        verbosity: cli.verbose,
+        no_magic_commands: cli.no_magic_commands,
     };
 
     settings.print_to_console();
@@ -235,6 +239,12 @@ fn main() {
         Some(Commands::List { count }) => list_notes(settings, count),
         Some(Commands::Search { term, count }) => search_notes(settings, term, count),
         Some(Commands::Path {}) => echo_path(settings),
+        Some(Commands::Backup {}) => echo_under_construction(settings),
+        Some(Commands::Restore { force }) => echo_under_construction(settings),
         _ => {}
     }
+}
+
+fn echo_under_construction(_settings: Settings) {
+    println!("🔨🔨🔨 Currently under construction 🔨🔨🔨")
 }
