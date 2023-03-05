@@ -6,13 +6,7 @@ When working on 100 things at once as a dev, I want to be asked to take notes on
 NoteAble should be able to prompt the user for a note, and write that note to a output file for safe keeping along with all the necessary tags.
 It shouldn't be an orchestration tool, just the core note taking prompt and config tool that can be run by another platform, such as an OS.
 
-## Usage
-
-Pull help with
-
-```bash
-scribr --help
-```
+## `$ scribr --help`
 
 ```
 Take notes in the CLI and back them up to GitHub! 📓🚀
