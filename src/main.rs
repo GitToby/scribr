@@ -16,7 +16,7 @@ use scan_fmt::scan_fmt;
 #[derive(Parser)]
 #[command(author, version, about, long_about = None, arg_required_else_help(true))]
 struct Cli {
-    /// Sets a custom config file
+    /// Sets a custom note output file
     #[arg(short, long)]
     file: Option<PathBuf>,
 
