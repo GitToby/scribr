@@ -149,7 +149,7 @@ fn get_notes_file(path: PathBuf) -> File {
 
 fn take_note(settings: Settings, note_value: &String, echo: &bool) {
     if settings.verbosity > 0 {
-        println!("✏️ ✏️ ✏️ Taking note {}", note_value);
+        println!("✏️✏️✏️ Taking note {}", note_value);
     }
 
     let mut file = get_notes_file(settings.notes_file_path);
