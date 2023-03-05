@@ -1,1 +1,9 @@
+#https://github.com/b2a3e8/jekyll-theme-console
+
 remote_theme: b2a3e8/jekyll-theme-console
+listen_for_clients_preferred_style: true
+
+footer: 'Build by <a href="https://tobydevlin.com/">Toby</a>.'
+
+plugins:
+  - jekyll-seo-tag
