@@ -3,6 +3,9 @@ name: Build & Test
 on:
   push:
 
+env:
+  MIN_SUPPORTED_RUST_VERSION: "1.62.0"
+
 jobs:
   build:
     strategy:
@@ -10,7 +13,18 @@ jobs:
         build_platform: [ "ubuntu-latest", "windows-latest", "macos-latest" ]
     runs-on: ${{ matrix.build_platform }}
     steps:
+      - name: Install rust toolchain (v${{ env.MIN_SUPPORTED_RUST_VERSION }})
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: ${{ env.MIN_SUPPORTED_RUST_VERSION }}
+          default: true
+          profile: minimal # minimal component installation (ie, no documentation)
+          components: clippy
+
       - uses: actions/checkout@v2
+
+      - name: Format
+        run: cargo fmt -- --check
 
       - name: Build
         run: cargo build --verbose --release
@@ -18,7 +32,7 @@ jobs:
       - name: Run tests
         run: cargo test --verbose
 
-      - name: Upload Artefacts
+      - name: Upload Artifacts
         uses: actions/upload-artifact@v3
         with:
           name: build ${{ matrix.build_platform }}
