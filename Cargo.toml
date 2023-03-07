@@ -1,7 +1,7 @@
 [package]
 name = "scribr"
-version = "0.1.0"
-description ="Take notes in the CLI and back them up to GitHub! 📓🚀"
+version = "0.0.1"
+description = "Take notes in the CLI and back them up to GitHub Gist or a git repo! 📓🚀"
 authors = ["Toby Devlin <toby@tobydevlin.com>"]
 edition = "2018"
 
@@ -16,3 +16,6 @@ fuzzy-matcher = "0.3.7"
 scan_fmt = "0.2.6"
 reqwest = { version = "0.11.14", features = ["json", "blocking"] }
 serde = { version = "1.0", features = ["derive"] }
+git2 = "0.16.1"
+serde_yaml = "0.9.19"
+
