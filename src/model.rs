@@ -3,6 +3,7 @@ use std::path::PathBuf;
 
 use chrono::{DateTime, Local};
 use scan_fmt::scan_fmt;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug)]
 pub struct Settings {
@@ -61,4 +62,33 @@ impl Display for Note {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{} - {}", self.timestamp.to_rfc2822(), self.note_value)
     }
+}
+
+#[derive(Debug, Serialize)]
+pub struct GhDeviceCodeRequest {
+    pub(crate) client_id: String,
+    pub(crate) scope: String,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct GhDeviceCodeResponse {
+    pub device_code: String,
+    pub user_code: String,
+    pub verification_uri: String,
+    pub expires_in: u64,
+    pub interval: u64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct GhPollRequest {
+    pub(crate) client_id: String,
+    pub(crate) device_code: String,
+    pub(crate) grant_type: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GhPollResponse {
+    pub(crate) access_token: String,
+    token_type: String,
+    scope: String,
 }

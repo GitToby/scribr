@@ -1,13 +1,16 @@
+extern crate core;
+
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
 use dirs::home_dir;
 
-use crate::commands::{echo_path, echo_under_construction, list_notes, search_notes, take_note};
+use crate::commands::{
+    echo_path, echo_under_construction, gh_login, list_notes, search_notes, take_note,
+};
 use crate::model::Settings;
 
 mod commands;
-mod constants;
 mod model;
 
 // https://docs.rs/clap/4.1.8/clap/_derive/index.html
@@ -32,7 +35,7 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum GhCommand {
-    /// Log in to your github account to back up commands
+    /// Log in to your github account to back up commandss
     Login,
 
     /// Back up notes to a GitHub gist
@@ -116,7 +119,7 @@ fn main() {
         Some(Commands::Search { term, count }) => search_notes(settings, term, count),
         Some(Commands::Path {}) => echo_path(settings),
         Some(Commands::Gh { command }) => match command {
-            Some(GhCommand::Login {}) => echo_under_construction(settings),
+            Some(GhCommand::Login {}) => gh_login(settings),
             Some(GhCommand::Backup) => echo_under_construction(settings),
             Some(GhCommand::Restore { force: _force }) => echo_under_construction(settings),
             _ => {}
