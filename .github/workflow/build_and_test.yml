@@ -1,0 +1,25 @@
+name: Build & Test
+
+on:
+  push:
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        build_platform: [ "ubuntu-latest", "windows-latest", "macos-latest" ]
+    runs-on: ${{ matrix.build_platform }}
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Build
+        run: cargo build --verbose --release
+
+      - name: Run tests
+        run: cargo test --verbose
+
+      - name: Upload Artefacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: build ${{ matrix.build_platform }}
+          path: ${{ github.workspace }}/target/release/scribr.*

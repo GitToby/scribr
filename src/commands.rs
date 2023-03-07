@@ -184,7 +184,7 @@ fn get_gh_access_token_oauth() -> String {
     access_response.access_token
 }
 
-fn get_gh_access_token_cli() {
+fn get_gh_access_token_gh_cli() {
     let path = home_dir().map(|p| p.join(".config/gh/hosts.yml"));
 }
 
