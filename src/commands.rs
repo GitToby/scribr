@@ -9,6 +9,7 @@ use std::time::Duration;
 use dirs::home_dir;
 use fuzzy_matcher::skim::SkimMatcherV2;
 use fuzzy_matcher::FuzzyMatcher;
+use git2::Repository;
 use reqwest::blocking::Response;
 use reqwest::{header, Method};
 use rev_lines::RevLines;
