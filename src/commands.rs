@@ -1,26 +1,27 @@
 use std::cmp::min;
-use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
+use std::io::BufReader;
 use std::io::Write;
-use std::io::{BufReader, Read};
 use std::path::PathBuf;
+use std::thread;
 use std::time::Duration;
-use std::{thread, time};
 
+use dirs::home_dir;
 use fuzzy_matcher::skim::SkimMatcherV2;
 use fuzzy_matcher::FuzzyMatcher;
 use reqwest::blocking::Response;
-use reqwest::header::{HeaderMap, HeaderValue};
-use reqwest::{header, Method, Request};
+use reqwest::{header, Method};
 use rev_lines::RevLines;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
 use crate::model::{
-    GhDeviceCodeRequest, GhDeviceCodeResponse, GhPollRequest, GhPollResponse, Note, Settings,
+    GhAccessResponse, GhDeviceCodeRequest, GhDeviceCodeResponse, GhGistListResponse, GhPollRequest,
+    Note, Settings,
 };
 
 const OAUTH_CLIENT_ID: &str = "2095923defc5784232a5";
 const GH_REQUEST_ERROR_LOG: &str = "Something went wrong with communicating with GitHub";
+// const SCRIBR_DATA_DIR: PathBuf = home_dir().map(|p| p.join(".scribr")).unwrap();
 
 fn get_notes_file(path: PathBuf) -> File {
     let file = match OpenOptions::new()
@@ -40,7 +41,7 @@ pub fn take_note(settings: Settings, note: &String, echo: &bool) {
         println!("✏️✏️✏️ Taking note {}", note);
     }
 
-    let mut file = get_notes_file(settings.notes_file_path);
+    let mut file = get_notes_file(settings.scribr_data_dir);
 
     let full_note = Note::new(note.clone());
     if *echo {
@@ -55,7 +56,7 @@ pub fn list_notes(settings: Settings, count: &u8) {
         println!("📓 Printing your last {} notes:", count);
     }
 
-    let file = get_notes_file(settings.notes_file_path);
+    let file = get_notes_file(settings.scribr_data_dir);
     let mut reader = RevLines::new(BufReader::new(file)).unwrap();
 
     for i in 0..*count {
@@ -65,7 +66,7 @@ pub fn list_notes(settings: Settings, count: &u8) {
 }
 
 pub fn search_notes(settings: Settings, term: &String, count: &u8) {
-    let file = get_notes_file(settings.notes_file_path);
+    let file = get_notes_file(settings.scribr_data_dir);
     let reader = RevLines::new(BufReader::new(file)).unwrap();
     let matcher = SkimMatcherV2::default();
 
@@ -99,33 +100,30 @@ pub fn search_notes(settings: Settings, term: &String, count: &u8) {
 }
 
 pub fn echo_path(settings: Settings) {
-    println!("{}", settings.notes_file_path.display())
-}
-
-fn make_post_web_request<T: Serialize>(url: &str, extra_headers: HeaderMap, body: &T) -> Response {
-    make_web_request(Method::POST, url, extra_headers, body)
-}
-
-fn make_get_web_request<T: Serialize>(url: &str, extra_headers: HeaderMap, body: &T) -> Response {
-    make_web_request(Method::GET, url, extra_headers, body)
+    println!("{}", settings.scribr_data_dir.display())
 }
 
 fn make_web_request<T: Serialize>(
     method: Method,
     url: &str,
-    extra_headers: HeaderMap,
-    body: &T,
+    token: Option<&str>,
+    body: Option<&T>,
 ) -> Response {
-    let response = reqwest::blocking::Client::builder()
+    let mut builder = reqwest::blocking::Client::builder()
         .build()
         .expect("Could not build the HTTP Request client")
         .request(method, url)
         .header(header::ACCEPT, "application/json")
-        .header(header::USER_AGENT, "scribr")
-        .headers(extra_headers)
-        .json(body)
-        .send()
-        .expect(GH_REQUEST_ERROR_LOG);
+        .header(header::USER_AGENT, "scribr");
+
+    if let Some(token) = token {
+        builder = builder.bearer_auth(token);
+    }
+    if let Some(body) = body {
+        builder = builder.json(body);
+    }
+
+    let response = builder.send().expect(GH_REQUEST_ERROR_LOG);
 
     let status_code = response.status();
     if !status_code.is_success() {
@@ -135,41 +133,44 @@ fn make_web_request<T: Serialize>(
     }
 }
 
-pub fn send_access_code_request(device_code: &str) -> reqwest::Result<GhPollResponse> {
+fn send_access_code_request(device_code: &str) -> reqwest::Result<GhAccessResponse> {
     let body = GhPollRequest {
         client_id: OAUTH_CLIENT_ID.to_string(),
         device_code: device_code.to_string(),
         grant_type: "urn:ietf:params:oauth:grant-type:device_code".to_string(),
     };
-    let response = make_post_web_request(
+    let response = make_web_request(
+        Method::POST,
         "https://github.com/login/oauth/access_token",
-        HeaderMap::new(),
-        &body,
+        None,
+        Some(&body),
     );
     let result1 = response.json();
     result1
 }
 
 // https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps#device-flow
-pub fn gh_login(_settings: Settings) {
+fn get_gh_access_token_oauth() -> String {
     let body = GhDeviceCodeRequest {
         client_id: OAUTH_CLIENT_ID.to_string(),
         scope: "gist".to_string(),
     };
 
-    let response = make_post_web_request(
+    let response = make_web_request(
+        Method::POST,
         "https://github.com/login/device/code",
-        HeaderMap::new(),
-        &body,
+        None,
+        Some(&body),
     );
 
     let res_json: GhDeviceCodeResponse = response.json().expect("bad response value");
+
     println!(
         "Log in to Github by entering your code, {}, at {}. I'll wait here!",
         res_json.user_code, res_json.verification_uri
     );
 
-    let r: GhPollResponse = loop {
+    let access_response: GhAccessResponse = loop {
         match send_access_code_request(&res_json.device_code) {
             Err(error) => {
                 println!("waiting {} seconds!", res_json.interval);
@@ -179,21 +180,49 @@ pub fn gh_login(_settings: Settings) {
             Ok(response) => break response,
         }
     };
+    access_response.access_token
+}
 
-    println!("{}", r.access_token.clone());
-    let mut extra_headers = HeaderMap::new();
-    let bearer_string = format!("Bearer {}", r.access_token);
-    extra_headers.append(
-        header::AUTHORIZATION,
-        HeaderValue::from_str(&*bearer_string).unwrap(),
+fn get_gh_access_token_cli() {
+    let path = home_dir().map(|p| p.join(".config/gh/hosts.yml"));
+}
+
+pub fn gh_fetch_gists(gh_access_token: &String) {
+    let gist_response = make_web_request::<()>(
+        Method::GET,
+        "https://api.github.com/gists",
+        Some(gh_access_token),
+        None,
     );
-    let gist_response = make_get_web_request("https://api.github.com/gists", extra_headers, &body);
-    let result1 = gist_response.text().unwrap();
-    dbg!(result1);
+    let gists: Vec<GhGistListResponse> = gist_response.json().expect("bad eresponse from Github!");
+
+    let mut scribr_gist: Option<&GhGistListResponse> = None;
+    for gist in &gists {
+        let gist_name = gist.files.keys().next().unwrap();
+        if gist_name == "scribr_notes.txt" {
+            scribr_gist = Some(gist);
+            break;
+        }
+    }
+
+    match scribr_gist {
+        Some(gist) => {
+            println!(
+                "using likely gist for note store: {} ({})",
+                gist.files.keys().next().unwrap(),
+                gist.html_url
+            );
+        }
+        None => {
+            println!("No gist found that we can use, please specify the gist id with --gist-id.");
+        }
+    }
 
     // now do the update after checking the right gist
     // also write some damn tests!
 }
+
+fn backup_notes(_settings: Settings, gist_id: String) {}
 
 pub fn echo_under_construction(_settings: Settings) {
     println!("🔨🔨🔨 Currently under construction 🔨🔨🔨")

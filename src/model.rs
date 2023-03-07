@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
 
@@ -7,7 +8,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug)]
 pub struct Settings {
-    pub(crate) notes_file_path: PathBuf,
+    pub(crate) scribr_data_dir: PathBuf,
     pub(crate) verbosity: u8,
     pub(crate) no_magic_commands: bool,
 }
@@ -16,7 +17,7 @@ impl Settings {
     pub(crate) fn print_to_console(&self) {
         if self.verbosity > 0 {
             println!("Running in verbose level {}.", self.verbosity);
-            println!("Using note file at {}", self.notes_file_path.display());
+            println!("Using note file at {}", self.scribr_data_dir.display());
             if self.no_magic_commands {
                 println!("Ignoring magic all.");
             }
@@ -87,8 +88,68 @@ pub struct GhPollRequest {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct GhPollResponse {
+pub struct GhAccessResponse {
     pub(crate) access_token: String,
     token_type: String,
     scope: String,
 }
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Owner {
+    pub login: String,
+    pub id: i64,
+    pub node_id: String,
+    pub avatar_url: String,
+    pub gravatar_id: String,
+    pub url: String,
+    pub html_url: String,
+    pub followers_url: String,
+    pub following_url: String,
+    pub gists_url: String,
+    pub starred_url: String,
+    pub subscriptions_url: String,
+    pub organizations_url: String,
+    pub repos_url: String,
+    pub events_url: String,
+    pub received_events_url: String,
+    #[serde(rename = "type")]
+    pub r#type: String,
+    pub site_admin: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct File {
+    pub filename: String,
+    #[serde(rename = "type")]
+    pub r#type: String,
+    pub language: String,
+    pub raw_url: String,
+    pub size: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GhGistListResponse {
+    pub url: String,
+    pub forks_url: String,
+    pub commits_url: String,
+    pub id: String,
+    pub node_id: String,
+    pub git_pull_url: String,
+    pub git_push_url: String,
+    pub html_url: String,
+    pub files: HashMap<String, File>,
+    pub public: bool,
+    pub created_at: String,
+    pub updated_at: String,
+    pub description: String,
+    pub comments: i64,
+    pub user: Option<String>,
+    pub comments_url: String,
+    pub owner: Owner,
+    pub truncated: bool,
+}
+
+// github.com:
+//     user: GitToby
+//     oauth_token: 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
+//     git_protocol: ssh

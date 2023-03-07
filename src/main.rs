@@ -6,7 +6,7 @@ use clap::{Parser, Subcommand};
 use dirs::home_dir;
 
 use crate::commands::{
-    echo_path, echo_under_construction, gh_login, list_notes, search_notes, take_note,
+    echo_path, echo_under_construction, gh_fetch_gists, list_notes, search_notes, take_note,
 };
 use crate::model::Settings;
 
@@ -35,17 +35,20 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum GhCommand {
-    /// Log in to your github account to back up commandss
-    Login,
-
     /// Back up notes to a GitHub gist
-    Backup,
+    Backup {
+        #[arg(long)]
+        gist_id: String,
+    },
 
     /// Restore your notes file from a GitHub gist
     Restore {
         /// Force overwriting your local file with the remote file
         #[arg(short, long)]
         force: bool,
+
+        #[arg(long)]
+        gist_id: String,
     },
 }
 
@@ -104,7 +107,7 @@ fn main() {
     };
 
     let settings = Settings {
-        notes_file_path: note_file,
+        scribr_data_dir: note_file,
         verbosity: cli.verbose,
         no_magic_commands: cli.no_magic_commands,
     };
@@ -119,9 +122,11 @@ fn main() {
         Some(Commands::Search { term, count }) => search_notes(settings, term, count),
         Some(Commands::Path {}) => echo_path(settings),
         Some(Commands::Gh { command }) => match command {
-            Some(GhCommand::Login {}) => gh_login(settings),
-            Some(GhCommand::Backup) => echo_under_construction(settings),
-            Some(GhCommand::Restore { force: _force }) => echo_under_construction(settings),
+            Some(GhCommand::Backup { gist_id }) => echo_under_construction(settings),
+            Some(GhCommand::Restore {
+                force: _force,
+                gist_id,
+            }) => echo_under_construction(settings),
             _ => {}
         },
         _ => {}
