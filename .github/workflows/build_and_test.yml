@@ -30,7 +30,7 @@ jobs:
         run: cargo build --verbose --release
 
       - name: Run tests
-        run: cargo test --verbose
+        run: cargo tests --verbose
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v3

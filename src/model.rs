@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::convert::Into;
 use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
 
@@ -6,24 +7,52 @@ use chrono::{DateTime, Local};
 use scan_fmt::scan_fmt;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug)]
+pub const SCRIBR_CONFIG_FILE_NAME: &str = "scribr_config.yaml";
+pub const SCRIBR_DEFAULT_NOTEBOOK_FILE_NAME: &str = "notes.txt";
+
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+pub struct RemoteSettings {
+    pub(crate) gist_id: Option<String>,
+    pub(crate) token: Option<String>,
+}
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct Settings {
-    pub(crate) scribr_data_dir: PathBuf,
+    pub(crate) default_notebook: String,
+    #[serde(default)]
     pub(crate) verbosity: u8,
+    #[serde(default)]
     pub(crate) no_magic_commands: bool,
+
+    pub(crate) remote: Option<RemoteSettings>,
 }
 
 impl Settings {
     pub(crate) fn print_to_console(&self) {
-        if self.verbosity > 0 {
-            println!("Running in verbose level {}.", self.verbosity);
-            println!("Using note file at {}", self.scribr_data_dir.display());
+        let verbosity = self.verbosity;
+        if verbosity > 0 {
+            println!("Running in verbose level {}.", verbosity);
+            println!("Using note file {}", self.default_notebook);
             if self.no_magic_commands {
                 println!("Ignoring magic all.");
             }
         }
-        if self.verbosity > 1 {
+        if verbosity > 1 {
             println!("Full settings: {:?}", self);
+        }
+    }
+
+    pub(crate) fn get_default_notebook_path(&self) -> PathBuf {
+        return PathBuf::from(&self.default_notebook);
+    }
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Settings {
+            default_notebook: SCRIBR_DEFAULT_NOTEBOOK_FILE_NAME.to_string(),
+            verbosity: 0,
+            no_magic_commands: false,
+            remote: None,
         }
     }
 }
@@ -118,7 +147,7 @@ pub struct Owner {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct File {
+pub struct FileData {
     pub filename: String,
     #[serde(rename = "type")]
     pub r#type: String,
@@ -128,7 +157,18 @@ pub struct File {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct GhGistListResponse {
+pub struct File {
+    pub(crate) content: String,
+}
+
+impl From<String> for File {
+    fn from(value: String) -> Self {
+        File { content: value }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GhGistResponse {
     pub url: String,
     pub forks_url: String,
     pub commits_url: String,
@@ -137,7 +177,7 @@ pub struct GhGistListResponse {
     pub git_pull_url: String,
     pub git_push_url: String,
     pub html_url: String,
-    pub files: HashMap<String, File>,
+    pub files: GhFilesData,
     pub public: bool,
     pub created_at: String,
     pub updated_at: String,
@@ -149,7 +189,12 @@ pub struct GhGistListResponse {
     pub truncated: bool,
 }
 
-// github.com:
-//     user: GitToby
-//     oauth_token: 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
-//     git_protocol: ssh
+#[derive(Serialize, Deserialize)]
+pub struct GhGistCreateRequest {
+    pub description: String,
+    pub public: bool,
+    pub files: GhFiles,
+}
+
+pub type GhFiles = HashMap<String, File>;
+pub type GhFilesData = HashMap<String, FileData>;

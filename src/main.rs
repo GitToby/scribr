@@ -1,56 +1,36 @@
 extern crate core;
 
-use std::path::PathBuf;
-
 use clap::{Parser, Subcommand};
-use dirs::home_dir;
 
-use crate::commands::{
-    echo_path, echo_under_construction, gh_fetch_gists, list_notes, search_notes, take_note,
-};
-use crate::model::Settings;
+use crate::commands::{echo_path, init, list_notes, search_notes, take_note};
+use crate::internal::{get_scribr_config_file, get_settings, scriber_files_setup};
 
 mod commands;
+mod internal;
 mod model;
 
 // https://docs.rs/clap/4.1.8/clap/_derive/index.html
 #[derive(Parser)]
 #[command(author, version, about, long_about = None, arg_required_else_help(true))]
 struct Cli {
-    /// Sets a custom note output file
-    #[arg(short, long)]
-    file: Option<PathBuf>,
+    /// Use a config file
+    // todo: remove this to just be an env var
+    #[arg(long)]
+    force_config_overwrite: bool,
 
     /// Turn debugging information on
     #[arg(short, long, action = clap::ArgAction::Count)]
     verbose: u8,
 
     /// Turn magic all off while searching or listing notes
-    #[arg(short, long)]
+    #[arg(long)]
     no_magic_commands: bool,
 
     #[command(subcommand)]
     command: Option<Commands>,
 }
 
-#[derive(Subcommand)]
-enum GhCommand {
-    /// Back up notes to a GitHub gist
-    Backup {
-        #[arg(long)]
-        gist_id: String,
-    },
-
-    /// Restore your notes file from a GitHub gist
-    Restore {
-        /// Force overwriting your local file with the remote file
-        #[arg(short, long)]
-        force: bool,
-
-        #[arg(long)]
-        gist_id: String,
-    },
-}
+const PRINT_LEN_DEFAULT: &str = "20";
 
 #[derive(Subcommand)]
 enum Commands {
@@ -67,7 +47,7 @@ enum Commands {
     /// 📑 List your notes chronologically.
     List {
         /// Number of notes to list
-        #[arg(short = 'n', long, default_value = "10")]
+        #[arg(short = 'n', long, default_value = PRINT_LEN_DEFAULT)]
         count: u8,
     },
 
@@ -77,12 +57,25 @@ enum Commands {
         term: String,
 
         /// Number of notes to list.
-        #[arg(short = 'n', long, default_value = "10")]
+        #[arg(short = 'n', long, default_value = PRINT_LEN_DEFAULT)]
         count: u8,
     },
 
-    /// 📁 Echo the notes file path
+    /// 📁 Open the notes file path
     Path,
+
+    /// Init or re-init scribr
+    Init {
+        /// initialize with no backup to github
+        #[arg(long)]
+        no_gh: bool,
+        /// force overwriting existing files - THIS WILL REMOVE ALL YOUR NOTES ON THIS MACHINE
+        #[arg(long)]
+        force: bool,
+        /// use a specific gist for backing up notes
+        #[arg(long)]
+        gist_id: Option<String>,
+    },
 
     /// ☁️ Interact with the GitHub in the context of scribr
     #[command()]
@@ -92,27 +85,33 @@ enum Commands {
     },
 }
 
+#[derive(Subcommand)]
+enum GhCommand {
+    Init {
+        #[arg(long)]
+        gist_id: Option<String>,
+    },
+
+    /// Back up notes to a GitHub gist
+    Backup,
+
+    /// Restore your notes file from a GitHub gist
+    Restore {
+        /// Force overwriting your local file with the remote file
+        #[arg(short, long)]
+        force: bool,
+    },
+}
+
 fn main() {
     let cli = Cli::parse();
 
-    let note_file = match cli.file {
-        Some(notes_file) => notes_file,
-        None => {
-            let note_path = home_dir()
-                .map(|p| p.join(".notes.txt"))
-                .expect("No home dir found!!");
-            println!("Setting custom note path {}", note_path.display());
-            note_path
-        }
-    };
+    if !scriber_files_setup() {
+        println!("Scribr is not initialized on the machine! run scribr init");
+        return;
+    }
 
-    let settings = Settings {
-        scribr_data_dir: note_file,
-        verbosity: cli.verbose,
-        no_magic_commands: cli.no_magic_commands,
-    };
-
-    settings.print_to_console();
+    let settings = get_settings(Some(get_scribr_config_file()));
 
     // You can check for the existence of subcommands, and if found use their
     // matches just as you would the top level cmd
@@ -121,14 +120,19 @@ fn main() {
         Some(Commands::List { count }) => list_notes(settings, count),
         Some(Commands::Search { term, count }) => search_notes(settings, term, count),
         Some(Commands::Path {}) => echo_path(settings),
-        Some(Commands::Gh { command }) => match command {
-            Some(GhCommand::Backup { gist_id }) => echo_under_construction(settings),
-            Some(GhCommand::Restore {
-                force: _force,
-                gist_id,
-            }) => echo_under_construction(settings),
-            _ => {}
-        },
+        Some(Commands::Init {
+            no_gh,
+            force,
+            gist_id,
+        }) => init(no_gh, force, Option::from(gist_id)),
+        // Some(Commands::Gh { command }) => match command {
+        //     Some(GhCommand::Backup { gist_id }) => backup_notes(settings, gist_id),
+        //     Some(GhCommand::Restore {
+        //         force: _force,
+        //         gist_id,
+        //     }) => echo_under_construction(settings),
+        //     _ => {}
+        // },
         _ => {}
     }
 }

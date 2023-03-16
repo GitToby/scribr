@@ -8,14 +8,20 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+# core CLI 
 clap = { version = "4.1.8", features = ["derive"] }
 chrono = "0.4.23"
 dirs = "4.0.0"
+
+# search and list tooling
 rev_lines = "0.2.1"
 fuzzy-matcher = "0.3.7"
 scan_fmt = "0.2.6"
+
+# backup to github
 reqwest = { version = "0.11.14", features = ["json", "blocking"] }
 serde = { version = "1.0", features = ["derive"] }
-git2 = "0.16.1"
 serde_yaml = "0.9.19"
-
+config = { version = "0.13.3", features = ["toml"] }
+git2 = "0.16.1"
+open = "4.0.0"
