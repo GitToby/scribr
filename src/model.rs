@@ -4,8 +4,11 @@ use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
 
 use chrono::{DateTime, Local};
+use dirs::config_dir;
 use scan_fmt::scan_fmt;
 use serde::{Deserialize, Serialize};
+
+use crate::internal::get_scribr_home_dir;
 
 pub const SCRIBR_CONFIG_FILE_NAME: &str = "scribr_config.yaml";
 pub const SCRIBR_DEFAULT_NOTEBOOK_FILE_NAME: &str = "notes.txt";
@@ -13,7 +16,6 @@ pub const SCRIBR_DEFAULT_NOTEBOOK_FILE_NAME: &str = "notes.txt";
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct RemoteSettings {
     pub(crate) gist_id: Option<String>,
-    pub(crate) token: Option<String>,
 }
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct Settings {
@@ -42,7 +44,16 @@ impl Settings {
     }
 
     pub(crate) fn get_default_notebook_path(&self) -> PathBuf {
-        return PathBuf::from(&self.default_notebook);
+        let home_dir = get_scribr_home_dir();
+        return home_dir.join(&self.default_notebook);
+    }
+
+    pub(crate) fn new_with_gist_id(gist_id: String) -> Settings {
+        let mut default_settings = Settings::default();
+        default_settings.remote = Some(RemoteSettings {
+            gist_id: Some(gist_id),
+        });
+        default_settings
     }
 }
 
@@ -191,8 +202,8 @@ pub struct GhGistResponse {
 
 #[derive(Serialize, Deserialize)]
 pub struct GhGistCreateRequest {
-    pub description: String,
-    pub public: bool,
+    pub description: Option<String>,
+    pub public: Option<bool>,
     pub files: GhFiles,
 }
 

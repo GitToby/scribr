@@ -7,13 +7,13 @@ them to a file. With `scribr`, you can easily keep track of all your notes and v
 the language you took them in. It's not a complicated tool, just the core note-taking tooling that can be run by a
 terminal system, so you can focus on the note and its context rather than the padding around the note.
 
-🔨👷 We will also support backups to GitHub Gists via Oauth. 
+🔨👷 We will also support backups to GitHub Gists via Oauth.
 
-🔨👷 We will also support refs & magic commands. 
+🔨👷 We will also support refs & magic commands.
 
 ## Why
 
-When working on 100 things at once as a dev, I want to be asked to take notes on my day-to-day goings-on. `scribr` 
+When working on 100 things at once as a dev, I want to be asked to take notes on my day-to-day goings-on. `scribr`
 tries to create an easier environment to take notes if you operate in the terminal every day.
 
 ## `$ scribr --help`
@@ -39,3 +39,9 @@ Options:
   -h, --help               Print help
   -V, --version            Print version
 ```
+
+Roadmap:
+
+- [ ] make the flow diagram of how to init the project locally
+- [ ] make the backup & restore process less clunky
+- [ ] ensure the config file scope is complete

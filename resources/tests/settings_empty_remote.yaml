@@ -3,4 +3,3 @@ verbosity: 0
 no_magic_commands: true
 remote:
   gist_id:
-  token:

@@ -2,8 +2,8 @@ extern crate core;
 
 use clap::{Parser, Subcommand};
 
-use crate::commands::{echo_path, init, list_notes, search_notes, take_note};
-use crate::internal::{get_scribr_config_file, get_settings, scriber_files_setup};
+use crate::commands::{backup_notes, init, list_notes, open_path, search_notes, take_note};
+use crate::internal::{get_scribr_config_file, get_settings_from_disk, scriber_files_setup};
 
 mod commands;
 mod internal;
@@ -62,7 +62,7 @@ enum Commands {
     },
 
     /// 📁 Open the notes file path
-    Path,
+    Open,
 
     /// Init or re-init scribr
     Init {
@@ -93,13 +93,21 @@ enum GhCommand {
     },
 
     /// Back up notes to a GitHub gist
-    Backup,
+    Backup {
+        /// include the settings file in your backup
+        #[arg(long)]
+        settings: bool,
+    },
 
     /// Restore your notes file from a GitHub gist
     Restore {
         /// Force overwriting your local file with the remote file
         #[arg(short, long)]
         force: bool,
+
+        /// include the settings file in your restore
+        #[arg(long)]
+        settings: bool,
     },
 }
 
@@ -111,28 +119,28 @@ fn main() {
         return;
     }
 
-    let settings = get_settings(Some(get_scribr_config_file()));
+    let run_settings = get_settings_from_disk(Some(get_scribr_config_file()));
 
     // You can check for the existence of subcommands, and if found use their
     // matches just as you would the top level cmd
     match &cli.command {
-        Some(Commands::Take { note, echo }) => take_note(settings, note, echo),
-        Some(Commands::List { count }) => list_notes(settings, count),
-        Some(Commands::Search { term, count }) => search_notes(settings, term, count),
-        Some(Commands::Path {}) => echo_path(settings),
+        Some(Commands::Take { note, echo }) => take_note(run_settings, note, echo),
+        Some(Commands::List { count }) => list_notes(run_settings, count),
+        Some(Commands::Search { term, count }) => search_notes(run_settings, term, count),
+        Some(Commands::Open {}) => open_path(),
         Some(Commands::Init {
             no_gh,
             force,
             gist_id,
         }) => init(no_gh, force, Option::from(gist_id)),
-        // Some(Commands::Gh { command }) => match command {
-        //     Some(GhCommand::Backup { gist_id }) => backup_notes(settings, gist_id),
-        //     Some(GhCommand::Restore {
-        //         force: _force,
-        //         gist_id,
-        //     }) => echo_under_construction(settings),
-        //     _ => {}
-        // },
+        Some(Commands::Gh { command }) => match command {
+            Some(GhCommand::Backup { settings }) => backup_notes(run_settings, settings),
+            // Some(GDhCommand::Restore {
+            //     force: _force,
+            //     gist_id,
+            // }) => echo_under_construction(run_settings),
+            _ => {}
+        },
         _ => {}
     }
 }

@@ -1,4 +1,5 @@
 use std::cmp::min;
+use std::fs;
 use std::fs::{create_dir_all, write, File, OpenOptions};
 use std::io::BufReader;
 use std::io::Write;
@@ -6,14 +7,16 @@ use std::path::PathBuf;
 
 use fuzzy_matcher::skim::SkimMatcherV2;
 use fuzzy_matcher::FuzzyMatcher;
+use git2::opts::reset_search_path;
 use rev_lines::RevLines;
 
 use crate::commands::github::{
-    get_gh_access_token_oauth, gh_create_scribr_gist, gh_fetch_scribr_gist,
-    gh_search_existing_scribr_gist,
+    get_gh_access_token_oauth, gh_create_scribr_gist, gh_fetch_scribr_gist, gh_push_gist_files,
 };
-use crate::internal::{get_default_init_files, get_scribr_home_dir};
-use crate::model::{Note, Settings};
+use crate::internal::{
+    get_default_init_files, get_scribr_config_file, get_scribr_home_dir, read_file,
+};
+use crate::model::{File as GhFile, GhFiles, Note, Settings, SCRIBR_CONFIG_FILE_NAME};
 
 mod github;
 
@@ -55,8 +58,9 @@ pub fn list_notes(settings: Settings, count: &u8) {
     let mut reader = RevLines::new(BufReader::new(file)).unwrap();
 
     for i in 0..*count {
-        let val = reader.next().unwrap();
-        println!("Note {}: {}", i, val);
+        if let Some(val) = reader.next() {
+            println!("Note {}: {}", i, val);
+        }
     }
 }
 
@@ -94,16 +98,14 @@ pub fn search_notes(settings: Settings, term: &String, count: &u8) {
     }
 }
 
-pub fn echo_path(settings: Settings) {
-    match open::that(&settings.get_default_notebook_path()) {
+pub fn open_path() {
+    let home_dir = get_scribr_home_dir();
+    match open::that(&home_dir) {
         Ok(_) => {
-            println!("Opening {}", settings.get_default_notebook_path().display())
+            println!("Opening {}", home_dir.display())
         }
         Err(_) => {
-            println!(
-                "Couldnt automatically open {}",
-                settings.get_default_notebook_path().display()
-            )
+            println!("Couldnt automatically open {}", home_dir.display())
         }
     };
 }
@@ -124,19 +126,29 @@ pub fn init(no_gh: &bool, force: &bool, gist_id: Option<&String>) {
     );
     create_dir_all(&scribr_home_dir).expect(&*err_msg);
 
-    // todo: make the borrowing here less difficult...
-    let files1 = get_default_init_files();
-    let files2 = get_default_init_files();
-
-    if !*no_gh {
+    let mut access_token = String::new();
+    let remote_gist_id = if !*no_gh {
         println!("Setting up GitHub gist for backup...");
-        let access_token = get_gh_access_token_oauth();
-        let gist_result = gh_fetch_scribr_gist(&access_token, gist_id);
-        match gist_result {
-            Some(gist) => gist,
-            None => gh_create_scribr_gist(&access_token, files1)
-                .expect("Could not create gist for scribr"),
+        access_token = get_gh_access_token_oauth();
+        let mut remote_gist = gh_fetch_scribr_gist(&access_token, gist_id);
+        if let None = remote_gist {
+            remote_gist = gh_create_scribr_gist(&access_token, get_default_init_files(None));
         };
+        if let Some(remote_gist) = remote_gist {
+            Some(remote_gist.id)
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    let files = get_default_init_files(remote_gist_id.clone());
+    let files2 = get_default_init_files(remote_gist_id.clone());
+
+    if let Some(gist_id) = &remote_gist_id {
+        // if the gist id exists we should update the settings file with the new gist ID
+        gh_push_gist_files(&access_token, gist_id, files);
     };
 
     for (file_name, file) in files2 {
@@ -147,21 +159,40 @@ pub fn init(no_gh: &bool, force: &bool, gist_id: Option<&String>) {
         } else {
             println!("Creating file {}", full_path.display());
         }
-        write(full_path, file.content).expect(&*err_msg);
+        write(full_path, &file.content).expect(&*err_msg);
     }
 }
 
-pub fn backup_notes(_settings: Settings, gist_id: &Option<String>) {
-    let access_token = get_gh_access_token_oauth();
-    let gist = {
-        if let Some(_) = gist_id {
-            gh_search_existing_scribr_gist(&access_token)
-        } else {
-            gh_search_existing_scribr_gist(&access_token)
-        }
-    };
+pub fn backup_notes(run_settings: Settings, settings: &bool) {
+    let gist_id = run_settings
+        .remote
+        .and_then(|remote| remote.gist_id)
+        .expect("bad result for gist id");
 
-    dbg!(gist);
+    let path = get_scribr_home_dir();
+    let mut files = GhFiles::new();
+    if let Ok(entries) = fs::read_dir(path) {
+        for entry in entries {
+            if let Ok(entry) = entry {
+                let file = entry.path();
+                let file_name = file
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .expect("Could not get file name!");
+                let content = read_file(&file).expect("could not extract file content");
+                if file_name == SCRIBR_CONFIG_FILE_NAME && !*settings {
+                    continue;
+                }
+                files.insert(file_name.to_string(), GhFile::from(content));
+            }
+        }
+    }
+    println!("We will back up the following files");
+    for f_name in files.keys() {
+        println!("{}", f_name)
+    }
+    let access_token = get_gh_access_token_oauth();
+    gh_push_gist_files(&access_token, &gist_id, files);
 }
 
 pub fn echo_under_construction(_settings: Settings) {

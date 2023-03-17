@@ -1,4 +1,3 @@
-use std::path::PathBuf;
 use std::thread::sleep;
 use std::time::Duration;
 
@@ -6,7 +5,6 @@ use reqwest::blocking::Response;
 use reqwest::{header, Method};
 use serde::Serialize;
 
-use crate::internal::get_default_init_files;
 use crate::model::{
     File, GhAccessResponse, GhDeviceCodeRequest, GhDeviceCodeResponse, GhFiles,
     GhGistCreateRequest, GhGistResponse, GhPollRequest, SCRIBR_CONFIG_FILE_NAME,
@@ -14,6 +12,8 @@ use crate::model::{
 
 const OAUTH_CLIENT_ID: &str = "2095923defc5784232a5";
 const GH_REQUEST_ERROR_LOG: &str = "Something went wrong with communicating with GitHub";
+const GH_DEFAULT_GIST_DESC: &str =
+    "Gist for storing my scribr notes - https://gittoby.github.io/scribr/";
 
 fn make_web_request<T: Serialize>(
     method: Method,
@@ -39,7 +39,7 @@ fn make_web_request<T: Serialize>(
 
     let status_code = response.status();
     if !status_code.is_success() {
-        panic!("Unsuccessful request {:#?}", status_code);
+        panic!("Unsuccessful request {} | {:#?}", url, status_code);
     } else {
         response
     }
@@ -136,10 +136,8 @@ pub fn gh_create_scribr_gist(
     initial_files: GhFiles,
 ) -> Option<GhGistResponse> {
     let body = GhGistCreateRequest {
-        description: String::from(
-            "Gist for storing my scribr notes - https://gittoby.github.io/scribr/",
-        ),
-        public: false,
+        description: Some(String::from(GH_DEFAULT_GIST_DESC)),
+        public: Some(false),
         files: initial_files,
     };
 
@@ -186,7 +184,26 @@ pub fn gh_pull_gist_files(gh_access_token: &String, gist_info: &GhGistResponse) 
     file_result
 }
 
-pub fn gh_push_gist_files(gh_access_token: &String, gist_id: &String, files_dir: PathBuf) {}
+pub fn gh_push_gist_files(
+    gh_access_token: &String,
+    gist_id: &String,
+    files: GhFiles,
+) -> Option<GhGistResponse> {
+    let body = GhGistCreateRequest {
+        description: Some(GH_DEFAULT_GIST_DESC.to_string()),
+        public: None,
+        files,
+    };
+    let url = format!("https://api.github.com/gists/{}", gist_id);
+    let gist_response = make_web_request(Method::PATCH, &*url, Some(gh_access_token), Some(&body));
+    match gist_response.json::<GhGistResponse>() {
+        Ok(gist) => {
+            println!("Updated files on gist {}", gist.html_url);
+            Some(gist)
+        }
+        Err(_) => None,
+    }
+}
 
 #[cfg(test)]
 mod tests {
