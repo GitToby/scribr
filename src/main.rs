@@ -61,7 +61,7 @@ enum Commands {
         count: u8,
     },
 
-    /// 📁 Open the notes file path
+    /// 📁 Open the notes dir
     Open,
 
     /// Init or re-init scribr
@@ -132,7 +132,7 @@ fn main() {
             no_gh,
             force,
             gist_id,
-        }) => init(no_gh, force, Option::from(gist_id)),
+        }) => init(no_gh, force, &gist_id.as_deref()),
         Some(Commands::Gh { command }) => match command {
             Some(GhCommand::Backup { settings }) => backup_notes(run_settings, settings),
             // Some(GDhCommand::Restore {

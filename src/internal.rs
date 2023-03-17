@@ -7,7 +7,7 @@ use dirs::home_dir;
 
 use crate::model::{File, Settings, SCRIBR_CONFIG_FILE_NAME};
 
-pub fn get_default_init_files(gist_id: Option<String>) -> HashMap<String, File> {
+pub fn get_default_init_files(gist_id: Option<&str>) -> HashMap<String, File> {
     let settings = match gist_id {
         None => Settings::default(),
         Some(gist_id) => Settings::new_with_gist_id(gist_id),

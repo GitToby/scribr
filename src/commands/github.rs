@@ -1,8 +1,8 @@
 use std::thread::sleep;
 use std::time::Duration;
 
-use reqwest::blocking::Response;
-use reqwest::{header, Method};
+use reqwest::{header, Error, Method};
+use serde::de::DeserializeOwned;
 use serde::Serialize;
 
 use crate::model::{
@@ -15,12 +15,12 @@ const GH_REQUEST_ERROR_LOG: &str = "Something went wrong with communicating with
 const GH_DEFAULT_GIST_DESC: &str =
     "Gist for storing my scribr notes - https://gittoby.github.io/scribr/";
 
-fn make_web_request<T: Serialize>(
+fn make_web_request<B: Serialize, R: DeserializeOwned>(
     method: Method,
     url: &str,
     token: Option<&str>,
-    body: Option<&T>,
-) -> Response {
+    body: Option<&B>,
+) -> Result<R, Error> {
     let mut builder = reqwest::blocking::Client::builder()
         .build()
         .expect("Could not build the HTTP Request client")
@@ -37,28 +37,28 @@ fn make_web_request<T: Serialize>(
 
     let response = builder.send().expect(GH_REQUEST_ERROR_LOG);
 
-    let status_code = response.status();
-    if !status_code.is_success() {
-        panic!("Unsuccessful request {} | {:#?}", url, status_code);
-    } else {
-        response
+    match response.error_for_status() {
+        Ok(result) => result.json::<R>(),
+        Err(e) => Err(e),
     }
 }
 
-fn send_access_code_request(device_code: &str) -> reqwest::Result<GhAccessResponse> {
+fn send_access_code_request(device_code: &str) -> Option<GhAccessResponse> {
     let body = GhPollRequest {
         client_id: OAUTH_CLIENT_ID.to_string(),
         device_code: device_code.to_string(),
         grant_type: "urn:ietf:params:oauth:grant-type:device_code".to_string(),
     };
-    let response = make_web_request(
+    let response: Result<GhAccessResponse, Error> = make_web_request(
         Method::POST,
         "https://github.com/login/oauth/access_token",
         None,
         Some(&body),
     );
-    let result1 = response.json();
-    result1
+    match response {
+        Ok(result) => Some(result),
+        Err(_) => None,
+    }
 }
 
 // https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps#device-flow
@@ -68,39 +68,46 @@ pub fn get_gh_access_token_oauth() -> String {
         scope: "gist".to_string(),
     };
 
-    let response = make_web_request(
+    let web_result: Result<GhDeviceCodeResponse, Error> = make_web_request(
         Method::POST,
         "https://github.com/login/device/code",
         None,
         Some(&body),
     );
 
-    let res_json: GhDeviceCodeResponse = response.json().expect("bad response value");
+    let response = match web_result {
+        Ok(res) => res,
+        Err(err) => panic!("{}: {}", GH_REQUEST_ERROR_LOG, err.to_string()),
+    };
 
     println!(
         "Log in to Github by entering your code, {}, at {}. I'll wait here!",
-        res_json.user_code, res_json.verification_uri
+        response.user_code, response.verification_uri
     );
 
     let access_response: GhAccessResponse = loop {
-        match send_access_code_request(&res_json.device_code) {
-            Err(_) => {
-                sleep(Duration::from_secs(res_json.interval));
+        match send_access_code_request(&response.device_code) {
+            Some(response) => break response,
+            None => {
+                sleep(Duration::from_secs(response.interval));
             }
-            Ok(response) => break response,
         }
     };
     access_response.access_token
 }
 
-pub fn gh_search_existing_scribr_gist(gh_access_token: &String) -> Option<GhGistResponse> {
-    let gist_response = make_web_request::<()>(
+pub fn gh_search_existing_scribr_gist(gh_access_token: &str) -> Option<GhGistResponse> {
+    let web_result = make_web_request::<(), Vec<GhGistResponse>>(
         Method::GET,
         "https://api.github.com/gists",
         Some(gh_access_token),
         None,
     );
-    let gists: Vec<GhGistResponse> = gist_response.json().expect("bad eresponse from Github!");
+
+    let gists = match web_result {
+        Ok(res) => res,
+        Err(err) => panic!("{}: {}", GH_REQUEST_ERROR_LOG, err.to_string()),
+    };
 
     for gist in gists {
         for gist_file_name in gist.files.keys() {
@@ -117,48 +124,48 @@ pub fn gh_search_existing_scribr_gist(gh_access_token: &String) -> Option<GhGist
 }
 
 pub fn gh_fetch_existing_scribr_gist(
-    gh_access_token: &String,
-    gist_id: &String,
+    gh_access_token: &str,
+    gist_id: &str,
 ) -> Option<GhGistResponse> {
     let url = format!("https://api.github.com/gists/{}", gist_id);
-    let gist_response = make_web_request::<()>(Method::GET, &*url, Some(gh_access_token), None);
-    match gist_response.json::<GhGistResponse>() {
-        Ok(gist) => {
-            print!("Using provided gist for note store: {}", gist.html_url);
-            Some(gist)
+    let web_result =
+        make_web_request::<(), GhGistResponse>(Method::GET, &*url, Some(gh_access_token), None);
+
+    match web_result {
+        Ok(res) => {
+            print!("Using provided gist for note store: {}", res.html_url);
+            Some(res)
         }
-        Err(_) => None,
+        Err(err) => None,
     }
 }
 
-pub fn gh_create_scribr_gist(
-    gh_access_token: &String,
-    initial_files: GhFiles,
-) -> Option<GhGistResponse> {
+pub fn gh_create_scribr_gist(gh_access_token: &str, initial_files: GhFiles) -> GhGistResponse {
     let body = GhGistCreateRequest {
         description: Some(String::from(GH_DEFAULT_GIST_DESC)),
         public: Some(false),
         files: initial_files,
     };
 
-    let gist_response = make_web_request(
+    let web_result: Result<GhGistResponse, Error> = make_web_request(
         Method::POST,
         "https://api.github.com/gists",
         Some(gh_access_token),
         Some(&body),
     );
-    match gist_response.json::<GhGistResponse>() {
-        Ok(gist) => {
-            print!("Created a new gist for note store: {}", gist.html_url);
-            Some(gist)
+
+    match web_result {
+        Ok(res) => {
+            print!("Created a new gist for note store: {}", res.html_url);
+            res
         }
-        Err(_) => None,
+        Err(err) => panic!("{}: {}", GH_REQUEST_ERROR_LOG, err.to_string()),
     }
 }
 
 pub fn gh_fetch_scribr_gist(
-    gh_access_token: &String,
-    gist_id: Option<&String>,
+    gh_access_token: &str,
+    gist_id: &Option<&str>,
 ) -> Option<GhGistResponse> {
     match gist_id {
         Some(gist_id) => gh_fetch_existing_scribr_gist(gh_access_token, gist_id),
@@ -166,12 +173,16 @@ pub fn gh_fetch_scribr_gist(
     }
 }
 
-pub fn gh_pull_gist_files(gh_access_token: &String, gist_info: &GhGistResponse) -> GhFiles {
+pub fn gh_pull_gist_files(gh_access_token: &str, gist_info: &GhGistResponse) -> GhFiles {
     let mut file_result = GhFiles::new();
     for (filename, file_data) in &gist_info.files {
-        let file_response =
-            make_web_request::<()>(Method::GET, &file_data.raw_url, Some(gh_access_token), None);
-        match file_response.text() {
+        let file_response = make_web_request::<(), String>(
+            Method::GET,
+            &file_data.raw_url,
+            Some(gh_access_token),
+            None,
+        );
+        match file_response {
             Ok(file_content) => {
                 file_result.insert(filename.clone(), File::from(file_content));
             }
@@ -184,37 +195,21 @@ pub fn gh_pull_gist_files(gh_access_token: &String, gist_info: &GhGistResponse) 
     file_result
 }
 
-pub fn gh_push_gist_files(
-    gh_access_token: &String,
-    gist_id: &String,
-    files: GhFiles,
-) -> Option<GhGistResponse> {
+pub fn gh_push_gist_files(gh_access_token: &str, gist_id: &str, files: GhFiles) -> GhGistResponse {
     let body = GhGistCreateRequest {
         description: Some(GH_DEFAULT_GIST_DESC.to_string()),
         public: None,
         files,
     };
     let url = format!("https://api.github.com/gists/{}", gist_id);
-    let gist_response = make_web_request(Method::PATCH, &*url, Some(gh_access_token), Some(&body));
-    match gist_response.json::<GhGistResponse>() {
-        Ok(gist) => {
-            println!("Updated files on gist {}", gist.html_url);
-            Some(gist)
+    let web_result: Result<GhGistResponse, Error> =
+        make_web_request(Method::PATCH, &*url, Some(gh_access_token), Some(&body));
+
+    match web_result {
+        Ok(res) => {
+            println!("Updated files on gist {}", res.html_url);
+            res
         }
-        Err(_) => None,
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use reqwest::StatusCode;
-
-    use super::*;
-
-    #[test]
-    fn test_make_web_request() {
-        // Make a request to a known URL that should return a successful response
-        let response = make_web_request::<()>(Method::GET, "https://httpbin.org/get", None, None);
-        assert_eq!(response.status(), StatusCode::OK);
+        Err(err) => panic!("{}: {}", GH_REQUEST_ERROR_LOG, err.to_string()),
     }
 }

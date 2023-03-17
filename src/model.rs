@@ -48,10 +48,10 @@ impl Settings {
         return home_dir.join(&self.default_notebook);
     }
 
-    pub(crate) fn new_with_gist_id(gist_id: String) -> Settings {
+    pub(crate) fn new_with_gist_id(gist_id: &str) -> Settings {
         let mut default_settings = Settings::default();
         default_settings.remote = Some(RemoteSettings {
-            gist_id: Some(gist_id),
+            gist_id: Some(gist_id.to_string()),
         });
         default_settings
     }
@@ -74,14 +74,14 @@ pub struct Note {
 }
 
 impl Note {
-    pub(crate) fn new(note_value: String) -> Note {
+    pub(crate) fn new(note_value: &str) -> Note {
         return Note {
             timestamp: Local::now(),
-            note_value,
+            note_value: note_value.to_string(),
         };
     }
 
-    pub(crate) fn new_from_line(line: &String) -> Note {
+    pub(crate) fn new_from_line(line: &str) -> Note {
         // This must match the fmt below, as the parse may fail.
         let fmt_res = scan_fmt!(line, "{} - {}", String, String);
 
@@ -167,7 +167,7 @@ pub struct FileData {
     pub size: i64,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct File {
     pub(crate) content: String,
 }
