@@ -10,11 +10,10 @@ use fuzzy_matcher::FuzzyMatcher;
 use rev_lines::RevLines;
 
 use crate::commands::github::{
-    get_gh_access_token_oauth, gh_create_scribr_gist, gh_fetch_scribr_gist, gh_push_gist_files,
+    get_gh_access_token_oauth, gh_create_scribr_gist, gh_fetch_scribr_gist, gh_pull_gist_files,
+    gh_push_gist_files,
 };
-use crate::internal::{
-    get_default_init_files, get_scribr_config_file, get_scribr_home_dir, read_file,
-};
+use crate::internal::{get_default_init_files, get_scribr_home_dir, read_file};
 use crate::model::{File as GhFile, GhFiles, Note, Settings, SCRIBR_CONFIG_FILE_NAME};
 
 mod github;
@@ -151,7 +150,7 @@ pub fn init(no_gh: &bool, force: &bool, gist_id: &Option<&str>) {
     }
 }
 
-pub fn backup_notes(run_settings: Settings, settings: &bool) {
+pub fn backup_notes(run_settings: Settings, include_settings: &bool) {
     let gist_id = run_settings
         .remote
         .and_then(|remote| remote.gist_id)
@@ -168,7 +167,7 @@ pub fn backup_notes(run_settings: Settings, settings: &bool) {
                     .and_then(|name| name.to_str())
                     .expect("Could not get file name!");
                 let content = read_file(&file).expect("could not extract file content");
-                if file_name == SCRIBR_CONFIG_FILE_NAME && !*settings {
+                if file_name == SCRIBR_CONFIG_FILE_NAME && !*include_settings {
                     continue;
                 }
                 files.insert(file_name.to_string(), GhFile::from(content));
@@ -181,6 +180,36 @@ pub fn backup_notes(run_settings: Settings, settings: &bool) {
     }
     let access_token = get_gh_access_token_oauth();
     gh_push_gist_files(&access_token, &gist_id, files);
+}
+
+pub fn restore_notes(run_settings: Settings, force: &bool, include_settings: &bool) {
+    let gist_id = run_settings
+        .remote
+        .and_then(|remote| remote.gist_id)
+        .expect("bad result for gist id");
+    let access_token = get_gh_access_token_oauth();
+    let files = gh_pull_gist_files(&access_token, &gist_id);
+    let home_dir = get_scribr_home_dir();
+
+    for (file_name, file_data) in files {
+        let full_path = home_dir.join(&file_name);
+        if full_path.exists() && !*force {
+            println!(
+                "Not overwriting file {} as --force was not applied",
+                full_path.display()
+            );
+            continue;
+        }
+        if !*force && !*include_settings && &file_name == SCRIBR_CONFIG_FILE_NAME {
+            println!(
+                "not overwriting settings file {}  as --include-settings was not passed",
+                full_path.display()
+            );
+            continue;
+        }
+        println!("Overwriting file {}", full_path.display());
+        write(full_path, file_data.content).unwrap();
+    }
 }
 
 pub fn echo_under_construction(_settings: Settings) {

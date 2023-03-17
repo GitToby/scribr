@@ -2,7 +2,10 @@ extern crate core;
 
 use clap::{Parser, Subcommand};
 
-use crate::commands::{backup_notes, init, list_notes, open_path, search_notes, take_note};
+use crate::commands::{
+    backup_notes, echo_under_construction, init, list_notes, open_path, restore_notes,
+    search_notes, take_note,
+};
 use crate::internal::{get_scribr_config_file, get_settings_from_disk, scriber_files_setup};
 
 mod commands;
@@ -96,7 +99,7 @@ enum GhCommand {
     Backup {
         /// include the settings file in your backup
         #[arg(long)]
-        settings: bool,
+        include_settings: bool,
     },
 
     /// Restore your notes file from a GitHub gist
@@ -107,7 +110,7 @@ enum GhCommand {
 
         /// include the settings file in your restore
         #[arg(long)]
-        settings: bool,
+        include_settings: bool,
     },
 }
 
@@ -134,11 +137,13 @@ fn main() {
             gist_id,
         }) => init(no_gh, force, &gist_id.as_deref()),
         Some(Commands::Gh { command }) => match command {
-            Some(GhCommand::Backup { settings }) => backup_notes(run_settings, settings),
-            // Some(GDhCommand::Restore {
-            //     force: _force,
-            //     gist_id,
-            // }) => echo_under_construction(run_settings),
+            Some(GhCommand::Backup { include_settings }) => {
+                backup_notes(run_settings, include_settings)
+            }
+            Some(GhCommand::Restore {
+                force,
+                include_settings,
+            }) => restore_notes(run_settings, force, include_settings),
             _ => {}
         },
         _ => {}

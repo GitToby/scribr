@@ -133,10 +133,10 @@ pub fn gh_fetch_existing_scribr_gist(
 
     match web_result {
         Ok(res) => {
-            print!("Using provided gist for note store: {}", res.html_url);
+            println!("Using provided gist for note store: {}", res.html_url);
             Some(res)
         }
-        Err(err) => None,
+        Err(_) => None,
     }
 }
 
@@ -156,7 +156,7 @@ pub fn gh_create_scribr_gist(gh_access_token: &str, initial_files: GhFiles) -> G
 
     match web_result {
         Ok(res) => {
-            print!("Created a new gist for note store: {}", res.html_url);
+            println!("Created a new gist for note store: {}", res.html_url);
             res
         }
         Err(err) => panic!("{}: {}", GH_REQUEST_ERROR_LOG, err.to_string()),
@@ -173,22 +173,36 @@ pub fn gh_fetch_scribr_gist(
     }
 }
 
-pub fn gh_pull_gist_files(gh_access_token: &str, gist_info: &GhGistResponse) -> GhFiles {
+pub fn gh_pull_gist_files(gh_access_token: &str, gist_id: &str) -> GhFiles {
     let mut file_result = GhFiles::new();
+    let gist_info = gh_fetch_existing_scribr_gist(gh_access_token, gist_id)
+        .expect("Bad gist for backups - if the id right?");
+
     for (filename, file_data) in &gist_info.files {
-        let file_response = make_web_request::<(), String>(
-            Method::GET,
-            &file_data.raw_url,
-            Some(gh_access_token),
-            None,
-        );
-        match file_response {
-            Ok(file_content) => {
-                file_result.insert(filename.clone(), File::from(file_content));
-            }
-            Err(_) => println!(
-                "Could not fetch data for {} from {}",
-                &filename, &file_data.raw_url
+        let response = reqwest::blocking::Client::builder()
+            .build()
+            .expect("Could not build the HTTP Request client")
+            .request(Method::GET, &file_data.raw_url)
+            .header(header::ACCEPT, "application/json")
+            .header(header::USER_AGENT, "scribr")
+            .bearer_auth(gh_access_token)
+            .send()
+            .expect(GH_REQUEST_ERROR_LOG);
+
+        match response.error_for_status() {
+            Ok(good_response) => good_response
+                .text()
+                .and_then(|content| {
+                    let file = File::from(content);
+                    file_result.insert(filename.to_owned(), file);
+                    Ok(())
+                })
+                .unwrap_or(()),
+            Err(e) => println!(
+                "Could not fetch data for {} from {} - {}",
+                &filename,
+                &file_data.raw_url,
+                e.to_string()
             ),
         };
     }

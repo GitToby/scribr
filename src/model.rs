@@ -4,7 +4,6 @@ use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
 
 use chrono::{DateTime, Local};
-use dirs::config_dir;
 use scan_fmt::scan_fmt;
 use serde::{Deserialize, Serialize};
 
